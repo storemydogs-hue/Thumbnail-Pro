@@ -24,24 +24,48 @@ export default function BulkDownloader() {
     setDownloading(true);
     const zip = new JSZip();
     const folder = zip.folder("thumbnails");
+    let successCount = 0;
 
     try {
-      const downloadPromises = successItems.map(async (item) => {
-        const imageUrl = getThumbnailUrl(item.id);
-        // Using a proxy to avoid CORS issues
-        const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
-        const response = await fetch(proxyUrl);
-        if (!response.ok) throw new Error(`Failed to fetch ${imageUrl}`);
-        const blob = await response.blob();
-        folder?.file(`${item.id}.jpg`, blob);
-      });
+      // Limiting concurrency to avoid browser/proxy throttling (process in chunks of 5)
+      const chunks = [];
+      for (let i = 0; i < successItems.length; i += 5) {
+        chunks.push(successItems.slice(i, i + 5));
+      }
 
-      await Promise.all(downloadPromises);
-      const content = await zip.generateAsync({ type: "blob" });
-      saveAs(content, `thumbnails_batch_${new Date().getTime()}.zip`);
+      for (const chunk of chunks) {
+        const chunkPromises = chunk.map(async (item) => {
+          try {
+            const imageUrl = getThumbnailUrl(item.id);
+            const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+            const response = await fetch(proxyUrl);
+            
+            if (!response.ok) {
+              console.warn(`Proxy failed for ${item.id}: ${response.status}`);
+              return;
+            }
+            
+            const blob = await response.blob();
+            if (blob.size > 0) {
+              folder?.file(`${item.id}.jpg`, blob);
+              successCount++;
+            }
+          } catch (err) {
+            console.error(`Error fetching image ${item.id}:`, err);
+          }
+        });
+        await Promise.all(chunkPromises);
+      }
+      
+      if (successCount > 0) {
+        const content = await zip.generateAsync({ type: "blob" });
+        saveAs(content, `thumbnails_batch_${new Date().getTime()}.zip`);
+      } else {
+        throw new Error("No images could be retrieved.");
+      }
     } catch (err) {
       console.error("Error generating ZIP:", err);
-      window.alert("Failed to generate ZIP. Please try individual downloads.");
+      window.alert("Failed to generate ZIP. This may be due to connection issues or empty results.");
     } finally {
       setDownloading(false);
     }

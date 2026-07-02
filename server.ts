@@ -17,21 +17,71 @@ async function startServer() {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  // Image Proxy to avoid CORS
+  // Image Proxy to avoid CORS and handle fallbacks
   app.get("/api/proxy-image", async (req, res) => {
-    const imageUrl = req.query.url as string;
+    let imageUrl = req.query.url as string;
     if (!imageUrl) return res.status(400).send("URL is required");
 
+    const fetchWithFallback = async (url: string) => {
+      const userAgents = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+      ];
+      
+      const attemptFetch = (targetUrl: string) => fetch(targetUrl, {
+        headers: {
+          "User-Agent": userAgents[Math.floor(Math.random() * userAgents.length)],
+          "Referer": "https://www.youtube.com/"
+        }
+      });
+
+      let response = await attemptFetch(url);
+
+      // If it's a YouTube thumbnail and it fails, try fallbacks
+      if (!response.ok && url.includes("img.youtube.com")) {
+        const fallbacks = ["maxresdefault", "hqdefault", "mqdefault", "default"];
+        let currentType = "";
+        
+        for (const type of fallbacks) {
+          if (url.includes(type)) {
+            currentType = type;
+            break;
+          }
+        }
+
+        if (currentType) {
+          for (const fallbackType of fallbacks) {
+            // Skip the one we already tried or higher qualities if we are already low
+            if (fallbacks.indexOf(fallbackType) <= fallbacks.indexOf(currentType)) continue;
+            
+            const fallbackUrl = url.replace(currentType, fallbackType);
+            console.log(`Proxy fallback: Trying ${fallbackType} instead of ${currentType}`);
+            const fbResponse = await attemptFetch(fallbackUrl);
+            if (fbResponse.ok) return fbResponse;
+          }
+        }
+      }
+
+      return response;
+    };
+
     try {
-      const response = await fetch(imageUrl);
+      const response = await fetchWithFallback(imageUrl);
+
+      if (!response.ok) {
+        console.error(`Proxy failure for ${imageUrl}: ${response.status} ${response.statusText}`);
+        return res.status(response.status).send(`External source error: ${response.statusText}`);
+      }
+
       const blob = await response.arrayBuffer();
       const contentType = response.headers.get("content-type") || "image/jpeg";
       
       res.setHeader("Content-Type", contentType);
+      res.setHeader("Cache-Control", "public, max-age=31536000"); // Cache for 1 year
       res.send(Buffer.from(blob));
     } catch (err) {
       console.error("Proxy error:", err);
-      res.status(500).send("Error fetching image");
+      res.status(500).send("Internal proxy error");
     }
   });
 
