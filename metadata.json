@@ -1,0 +1,6 @@
+{
+  "name": "Thumbnail Pro",
+  "description": "Advanced YouTube thumbnail downloader with bulk processing, analytics, and user dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

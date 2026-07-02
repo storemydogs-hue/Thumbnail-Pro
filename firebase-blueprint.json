@@ -1,0 +1,65 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and preferences",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "preferences": {
+          "type": "object",
+          "properties": {
+            "defaultFormat": { "type": "string", "enum": ["jpg", "webp"] },
+            "notificationsEnabled": { "type": "boolean" }
+          }
+        }
+      },
+      "required": ["uid", "email"]
+    },
+    "Download": {
+      "title": "Download",
+      "description": "Log of a thumbnail download",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "videoId": { "type": "string" },
+        "videoTitle": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "resolution": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "isBulk": { "type": "boolean" },
+        "batchId": { "type": "string" }
+      },
+      "required": ["userId", "videoId", "timestamp"]
+    },
+    "Analytics": {
+      "title": "Analytics",
+      "description": "Aggregated analytics data",
+      "type": "object",
+      "properties": {
+        "totalDownloads": { "type": "number" },
+        "popularVideos": { "type": "array" },
+        "lastUpdated": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Stores user profiles"
+    },
+    "/downloads/{downloadId}": {
+      "schema": "Download",
+      "description": "Stores download logs"
+    },
+    "/analytics/summary": {
+      "schema": "Analytics",
+      "description": "Stores global analytics"
+    }
+  }
+}
