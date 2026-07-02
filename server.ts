@@ -28,6 +28,8 @@ async function startServer() {
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
       ];
       
+      const domains = ["img.youtube.com", "i.ytimg.com", "i1.ytimg.com", "i2.ytimg.com"];
+      
       const attemptFetch = (targetUrl: string) => fetch(targetUrl, {
         headers: {
           "User-Agent": userAgents[Math.floor(Math.random() * userAgents.length)],
@@ -37,25 +39,26 @@ async function startServer() {
 
       let response = await attemptFetch(url);
 
-      // If it's a YouTube thumbnail and it fails, try fallbacks
-      if (!response.ok && url.includes("img.youtube.com")) {
-        const fallbacks = ["maxresdefault", "hqdefault", "mqdefault", "default"];
-        let currentType = "";
-        
-        for (const type of fallbacks) {
-          if (url.includes(type)) {
-            currentType = type;
-            break;
-          }
+      // If it's a YouTube thumbnail and it fails, try different domains and resolutions
+      if (!response.ok && url.includes("youtube.com") || url.includes("ytimg.com")) {
+        const fallbacks = ["maxresdefault", "hqdefault", "sddefault", "mqdefault", "default"];
+        let currentType = fallbacks.find(f => url.includes(f)) || "maxresdefault";
+
+        // Try rotating domains first for the same quality
+        for (const domain of domains) {
+          const domainUrl = url.replace(/img\.youtube\.com|i\.ytimg\.com|i\d\.ytimg\.com/, domain);
+          if (domainUrl === url) continue;
+          
+          const domainResponse = await attemptFetch(domainUrl);
+          if (domainResponse.ok) return domainResponse;
         }
 
-        if (currentType) {
-          for (const fallbackType of fallbacks) {
-            // Skip the one we already tried or higher qualities if we are already low
-            if (fallbacks.indexOf(fallbackType) <= fallbacks.indexOf(currentType)) continue;
-            
-            const fallbackUrl = url.replace(currentType, fallbackType);
-            console.log(`Proxy fallback: Trying ${fallbackType} instead of ${currentType}`);
+        // Try lower qualities across all domains
+        for (const fallbackType of fallbacks) {
+          if (fallbacks.indexOf(fallbackType) <= fallbacks.indexOf(currentType)) continue;
+          
+          for (const domain of domains) {
+            const fallbackUrl = url.replace(currentType, fallbackType).replace(/img\.youtube\.com|i\.ytimg\.com|i\d\.ytimg\.com/, domain);
             const fbResponse = await attemptFetch(fallbackUrl);
             if (fbResponse.ok) return fbResponse;
           }

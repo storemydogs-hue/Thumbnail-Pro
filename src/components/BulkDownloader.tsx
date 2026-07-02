@@ -14,6 +14,7 @@ export default function BulkDownloader() {
   const [urlsInput, setUrlsInput] = useState('');
   const [processing, setProcessing] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [bundleProgress, setBundleProgress] = useState(0);
   const [results, setResults] = useState<{ id: string; url: string; status: 'success' | 'error' }[]>([]);
   const { user } = useAuth();
 
@@ -22,6 +23,7 @@ export default function BulkDownloader() {
     if (successItems.length === 0) return;
 
     setDownloading(true);
+    setBundleProgress(0);
     const zip = new JSZip();
     const folder = zip.folder("thumbnails");
     let successCount = 0;
@@ -33,6 +35,7 @@ export default function BulkDownloader() {
         chunks.push(successItems.slice(i, i + 5));
       }
 
+      let processed = 0;
       for (const chunk of chunks) {
         const chunkPromises = chunk.map(async (item) => {
           try {
@@ -52,6 +55,9 @@ export default function BulkDownloader() {
             }
           } catch (err) {
             console.error(`Error fetching image ${item.id}:`, err);
+          } finally {
+            processed++;
+            setBundleProgress(Math.round((processed / successItems.length) * 100));
           }
         });
         await Promise.all(chunkPromises);
@@ -65,9 +71,10 @@ export default function BulkDownloader() {
       }
     } catch (err) {
       console.error("Error generating ZIP:", err);
-      window.alert("Failed to generate ZIP. This may be due to connection issues or empty results.");
+      window.alert("Failed to generate ZIP. Please check your internet connection or try again with fewer items.");
     } finally {
       setDownloading(false);
+      setBundleProgress(0);
     }
   };
 
@@ -244,14 +251,22 @@ export default function BulkDownloader() {
                 <button 
                   onClick={handleDownloadBundle}
                   disabled={downloading}
-                  className="w-full bg-white text-slate-950 py-3 rounded-lg font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 hover:bg-slate-200 transition-colors disabled:opacity-50"
+                  className="w-full bg-white text-slate-950 py-3 rounded-lg font-black uppercase tracking-widest text-[10px] flex flex-col items-center justify-center gap-1 hover:bg-slate-200 transition-colors disabled:opacity-50 relative overflow-hidden"
                 >
-                  {downloading ? (
-                    <Loader2 className="animate-spin" size={14} />
-                  ) : (
-                    <Download size={14} />
+                  <div className="flex items-center gap-2 z-10">
+                    {downloading ? (
+                      <Loader2 className="animate-spin" size={14} />
+                    ) : (
+                      <Download size={14} />
+                    )}
+                    {downloading ? `Bundling (${bundleProgress}%)` : 'Download Bundle'}
+                  </div>
+                  {downloading && (
+                    <div 
+                      className="absolute bottom-0 left-0 h-1 bg-emerald-500 transition-all duration-300" 
+                      style={{ width: `${bundleProgress}%` }}
+                    />
                   )}
-                  {downloading ? 'Bundling...' : 'Download Bundle'}
                 </button>
               </motion.div>
             )}
